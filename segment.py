@@ -91,7 +91,7 @@ def segregatePoints(sortedPoints):
     keysToMerge = [[]]
     lastKey = 999999
     for i in linesDic:
-        if (i > lastKey +20): ### < -------- tu usuń +20
+        if (i > lastKey + 20):  ### < -------- tu usuń +20
             keysToMerge.append([i])
         else:
             keysToMerge[len(keysToMerge) - 1].append(i)
@@ -104,7 +104,7 @@ def segregatePoints(sortedPoints):
         linesDic2[i] = sorted(linesDic2[i], key=lambda k: [k[0]])
         indToRemove = []
         for j in range(len(linesDic2[i]) - 1):
-            if (linesDic2[i][j][0] > linesDic2[i][j + 1][0] -50): ###<---- tu usuń -50
+            if (linesDic2[i][j][0] > linesDic2[i][j + 1][0] - 50):  ###<---- tu usuń -50
                 indToRemove.append(j + 1)
         linesDic2[i] = [i for j, i in enumerate(linesDic2[i]) if j not in indToRemove]
 
@@ -151,15 +151,17 @@ def cropPolygon(pts, img):
     dst2 = bg + dst
     return croped, mask, dst, dst2
 
-def cropBox(bbox,img):
+
+def cropBox(bbox, img):
     x1, y1, x2, y2 = bbox
     if x1 < 0 or y1 < 0 or x2 > img.shape[1] or y2 > img.shape[0]:
         img, x1, x2, y1, y2 = pad_img_to_fit_bbox(img, x1, x2, y1, y2)
     return img[y1:y2, x1:x2, :]
 
+
 def pad_img_to_fit_bbox(img, x1, x2, y1, y2):
     img = cv2.copyMakeBorder(img, - min(0, y1), max(y2 - img.shape[0], 0),
-                            -min(0, x1), max(x2 - img.shape[1], 0),cv2.BORDER_REPLICATE)
+                             -min(0, x1), max(x2 - img.shape[1], 0), cv2.BORDER_REPLICATE)
     y2 += -min(0, y1)
     y1 += -min(0, y1)
     x2 += -min(0, x1)
@@ -167,30 +169,64 @@ def pad_img_to_fit_bbox(img, x1, x2, y1, y2):
     return img, x1, x2, y1, y2
 
 
-def cropFields(segregatedPoints,img,dir='test'):
-    cnt=0
-    resImg=[]
-    for i in range(1,len(segregatedPoints[1])):
-        ptsL=segregatedPoints[1][i-1].copy()
-        ptsL[1]=0
-        ptsR=segregatedPoints[1][i].copy()
+def cropFields(segregatedPoints, img, dir='test'):
+    cnt = 0
+    resImg = []
+    for i in range(1, len(segregatedPoints[1])):
+        ptsL = segregatedPoints[1][i - 1].copy()
+        ptsL[1] = 0
+        ptsR = segregatedPoints[1][i].copy()
         ptsL.extend(ptsR)
-        cropped=cropBox(ptsL,img)
+        cropped = cropBox(ptsL, img)
         resImg.append(cropped)
-        #cv2.imwrite(dir+"/test"+str(cnt)+".jpg",cropped)
-        cnt+=1
+        cv2.imwrite(dir + "/cropped" + str(cnt) + ".jpg", cropped)
+        cnt += 1
 
-    for i in range(2, len (segregatedPoints)):
-        for j in range(1, len (segregatedPoints[i])):
-            ptsL = segregatedPoints[i-2][j - 1]
+    for i in range(2, len(segregatedPoints)):
+        for j in range(1, len(segregatedPoints[i])):
+            ptsL = segregatedPoints[i - 2][j - 1]
             ptsR = segregatedPoints[i][j]
             ptsL.extend(ptsR)
-            cropped=cropBox(ptsL,img)
+            cropped = cropBox(ptsL, img)
             resImg.append(cropped)
-            #cv2.imwrite(dir + "/test" + str(cnt) + ".jpg", cropped)
+            cv2.imwrite(dir + "/cropped" + str(cnt) + ".jpg", cropped)
             cnt += 1
+    return resImg
 
-def createSampImage(img,dir):
+
+def getFields(crops):
+    maxHight = 0
+    maxWidth = 0
+    for img in crops:
+        shape = img.shape[:2]
+        if shape[0] > maxHight:
+            maxHight = shape[0]
+        if shape[1] > maxWidth:
+            maxWidth = shape[1]
+    count = 0
+    fields = []
+    for img in crops:
+        if img.shape[0] < maxHight * 0.6 or img.shape[1] < maxWidth * 0.6:
+            # print("Refused:", img.shape[:2], img.shape[0] / maxHight, img.shape[1] / maxWidth)
+            pass
+        else:
+            count += 1
+            fields.append(img)
+    # print(count)
+    if count != 64:
+        raise Exception("Liczba pól powinna wynosić 64, a wynosi {}".format(count))
+
+    cols = ["a", "b", "c", "d", "e", "f", "g", "h"]
+    rows = [8, 7, 6, 5, 4, 3, 2, 1]
+    dict = {}
+    for row in range(8):
+        for col in range(8):
+            name = cols[col] + str(rows[row])
+            dict[name] = fields[8 * row + col]
+    return dict
+
+
+def createSampImage(img, dir):
     start = time.time()
     lines, img = createLines(img)
     strong = createStrongLines(lines)
@@ -222,20 +258,25 @@ def createSampImage(img,dir):
 
             except:
                 pass
-    cr=cropBox([753, -400,905, 259],img)
-    #cropFields(segregatedPoints,img,dir)
+    cr = cropBox([753, -400, 905, 259], img)
+    crops = cropFields(segregatedPoints, img, dir)
+    fields = getFields(crops)
     stop = time.time()
     print(stop - start)
 
     return img2
+
+
 import os
+
+
 def ensure_dir(file_path):
     if not os.path.exists(file_path):
         os.makedirs(file_path)
 
 
-for i in range(1,8):
-    img = cv2.imread('samp'+str(i)+'.jpg')
-    ensure_dir('testSample'+str(i))
-    test = createSampImage(img,'testSample'+str(i))
-    cv2.imwrite('testSample'+str(i)+'/samp'+str(i)+'Processed.jpg', test)
+for i in {1}:
+    img = cv2.imread('samp' + str(i) + '.jpg')
+    ensure_dir('testSample' + str(i))
+    test = createSampImage(img, 'testSample' + str(i))
+    cv2.imwrite('testSample' + str(i) + '/samp' + str(i) + 'Processed.jpg', test)
