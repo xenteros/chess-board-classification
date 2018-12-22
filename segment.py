@@ -1,6 +1,10 @@
+import scipy
+
 import cv2
 import numpy as np
 import time
+from scipy import stats
+
 from collections import defaultdict
 
 
@@ -194,27 +198,106 @@ def cropFields(segregatedPoints, img, dir='test'):
     return resImg
 
 
+def distance(point, center):
+    diffs = [(center[i] - point[i]) ** 2 for i in range(2)]
+    return np.sqrt(np.sum(diffs))
+
+
+def filterPoints(segregatedPoints, img):
+    pass
+    linesCount = len(segregatedPoints)
+    middleLine = segregatedPoints[linesCount / 2]
+
+    lineLength = len(middleLine)
+
+    print(lineLength / 2, middleLine, lineLength)
+    diffs = []
+    prev = [0, 0]
+    for i in range(lineLength):
+        curr = middleLine[i]
+        diffs.append(curr[0] - prev[0])
+        prev = curr
+    print(diffs)
+
+
+def filter_vertical_lines(segregated_points):
+    # for key in segregated_points:
+    #     print(segregated_points[key])
+
+    all_diffs = []
+    for key in segregated_points:
+        line = segregated_points[key]
+        prev = [0, 0]
+        diffs = []
+        for i in range(len(line)):
+            curr = line[i]
+            diffs.append(curr[0] - prev[0])
+            prev = curr
+        # print(diffs)
+        all_diffs.append(diffs)
+
+    starting_points = []
+    for row in all_diffs:
+        starting_points.append(find_first_important_vertical_line(row))
+    # print(starting_points)
+    starting_column = scipy.stats.mode(starting_points)[0][0]
+    # print(starting_column)
+    for key in segregated_points:
+        end = max(min(len(segregated_points[key]), starting_column + 8), 8)
+        segregated_points[key] = segregated_points[key][max(0, starting_column - 1):end]
+    # for key in segregated_points:
+    #     print(segregated_points[key])
+    return starting_column
+
+
+def find_first_important_vertical_line(row):
+    maxStartingPosition = len(row) - 7
+    max_differences = []
+    for i in range(0, maxStartingPosition):
+        min_ = 1500
+        max_ = -1500
+        for point in range(8):
+            if row[i + point] < min_:
+                min_ = row[i + point]
+            if row[i + point] > max_:
+                max_ = row[i + point]
+        max_differences.append(abs(max_ - min_))
+    return np.argmin(max_differences)
+
+
+def filter_horizontal_lines(segregated_points):
+    arr = [segregated_points[key] for key in segregated_points]
+    keys = [key for key in segregated_points]
+    if len(keys) < 10:
+        return
+    # print(keys)
+    middle = len(arr[0]) // 2
+    ys = [row[middle][1] for row in arr]
+    prs = []
+    prev = 0
+    for el in ys:
+        prs.append(el - prev)
+        prev = el
+    # print(prs)
+    eighth = -1
+    for i in range(len(prs)):
+        if prs[i] > 130:
+            eighth = i
+            break
+    print(eighth)
+
+    segregated_points.clear()
+    # print(keys)
+    subtractor = 2
+    if eighth == 1:
+        subtractor = 1
+    for i in range(8 + subtractor):
+        segregated_points[i] = arr[i + eighth - subtractor]
+
+
 def getFields(crops):
-    maxHight = 0
-    maxWidth = 0
-    for img in crops:
-        shape = img.shape[:2]
-        if shape[0] > maxHight:
-            maxHight = shape[0]
-        if shape[1] > maxWidth:
-            maxWidth = shape[1]
-    count = 0
-    fields = []
-    for img in crops:
-        if img.shape[0] < maxHight * 0.6 or img.shape[1] < maxWidth * 0.6:
-            # print("Refused:", img.shape[:2], img.shape[0] / maxHight, img.shape[1] / maxWidth)
-            pass
-        else:
-            count += 1
-            fields.append(img)
-    # print(count)
-    if count != 64:
-        raise Exception("Liczba pól powinna wynosić 64, a wynosi {}".format(count))
+    fields = crops[-64:]
+    print(len(fields))
 
     cols = ["a", "b", "c", "d", "e", "f", "g", "h"]
     rows = [8, 7, 6, 5, 4, 3, 2, 1]
@@ -223,6 +306,10 @@ def getFields(crops):
         for col in range(8):
             name = cols[col] + str(rows[row])
             dict[name] = fields[8 * row + col]
+
+    test = ["a8", "b7", "c6", "d5", "e4", "f3", "g2", "h1"]
+    for f in test:
+        cv2.imshow(f, dict[f])
     return dict
 
 
@@ -259,6 +346,11 @@ def createSampImage(img, dir):
             except:
                 pass
     cr = cropBox([753, -400, 905, 259], img)
+    # filterPoints(segregatedPoints, img)
+    filter_vertical_lines(segregatedPoints)
+    filter_horizontal_lines(segregatedPoints)
+    for key in segregatedPoints:
+        print(segregatedPoints[key])
     crops = cropFields(segregatedPoints, img, dir)
     fields = getFields(crops)
     stop = time.time()
@@ -275,8 +367,11 @@ def ensure_dir(file_path):
         os.makedirs(file_path)
 
 
-for i in {1}:
+for i in {1, 3, 4, 5, 6, 7}:
+# for i in {6}:
+    print("Processing img {}".format(i))
     img = cv2.imread('samp' + str(i) + '.jpg')
     ensure_dir('testSample' + str(i))
     test = createSampImage(img, 'testSample' + str(i))
     cv2.imwrite('testSample' + str(i) + '/samp' + str(i) + 'Processed.jpg', test)
+cv2.waitKey(0)
