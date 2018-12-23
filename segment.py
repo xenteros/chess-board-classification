@@ -79,7 +79,7 @@ def segmented_intersections(lines):
     return intersections
 
 
-def createLines(img):
+def create_lines(img):
     img = cv2.resize(img, (1500, 1500))
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray, 60, 150, apertureSize=3)
@@ -113,9 +113,6 @@ def segregatePoints(sortedPoints):
         linesDic2[i] = [i for j, i in enumerate(linesDic2[i]) if j not in indToRemove]
 
     return linesDic2
-
-
-args = "--output D:\\doWywaleniaUczelnia\\test.txt --twitter-source.consumerKey D3RoDElXkKzypiyoaJmUXZDdW --twitter-source.consumerSecret U4Ogi4lOjCaJ3gnlvor7ZN3Eqoyih0do5KV9C8rrG66D8OLKrw --twitter-source.token 743995742-5gWpCMulAKtcT12l3B0avoXNBOioHeFm4NoSprAF --twitter-source.tokenSecret na7HPUONFJDJXhckgMKSoKu4p0FLg4GZ4vtXtyUPOGyzd"
 
 
 def createStrongLines(lines):
@@ -262,16 +259,21 @@ def find_first_important_vertical_line(row):
             if row[i + point] > max_:
                 max_ = row[i + point]
         max_differences.append(abs(max_ - min_))
+    if len(max_differences) == 0:
+        return 0
     return np.argmin(max_differences)
 
 
 def filter_horizontal_lines(segregated_points):
-    arr = [segregated_points[key] for key in segregated_points]
+    arr = [segregated_points[key] for key in segregated_points if len(segregated_points[key]) > 0]
     keys = [key for key in segregated_points]
     if len(keys) < 10:
         return
     # print(keys)
     middle = len(arr[0]) // 2
+    for row in arr:
+        print(row)
+    print(middle)
     ys = [row[middle][1] for row in arr]
     prs = []
     prev = 0
@@ -284,7 +286,7 @@ def filter_horizontal_lines(segregated_points):
         if prs[i] > 130:
             eighth = i
             break
-    print(eighth)
+    # print(eighth)
 
     segregated_points.clear()
     # print(keys)
@@ -295,9 +297,9 @@ def filter_horizontal_lines(segregated_points):
         segregated_points[i] = arr[i + eighth - subtractor]
 
 
-def getFields(crops):
+def get_fields(crops):
     fields = crops[-64:]
-    print(len(fields))
+    # print(len(fields))
 
     cols = ["a", "b", "c", "d", "e", "f", "g", "h"]
     rows = [8, 7, 6, 5, 4, 3, 2, 1]
@@ -305,17 +307,18 @@ def getFields(crops):
     for row in range(8):
         for col in range(8):
             name = cols[col] + str(rows[row])
+            print(name, len(fields))
             dict[name] = fields[8 * row + col]
 
     test = ["a8", "b7", "c6", "d5", "e4", "f3", "g2", "h1"]
-    for f in test:
-        cv2.imshow(f, dict[f])
+    # for f in test:
+    #     cv2.imshow(f, dict[f])
     return dict
 
 
 def createSampImage(img, dir):
     start = time.time()
-    lines, img = createLines(img)
+    lines, img = create_lines(img)
     strong = createStrongLines(lines)
 
     segmented = segment_by_angle_kmeans(strong)
@@ -349,29 +352,37 @@ def createSampImage(img, dir):
     # filterPoints(segregatedPoints, img)
     filter_vertical_lines(segregatedPoints)
     filter_horizontal_lines(segregatedPoints)
-    for key in segregatedPoints:
-        print(segregatedPoints[key])
+    # for key in segregatedPoints:
+    #     print(segregatedPoints[key])
     crops = cropFields(segregatedPoints, img, dir)
-    fields = getFields(crops)
+    fields = get_fields(crops)
     stop = time.time()
     print(stop - start)
 
-    return img2
+    return img2, fields
 
 
 import os
+import dataset
+from utils import ensure_dir
 
+# for i in {1, 3, 4, 5, 6, 7}:
+# for i in {1}:
+#     print("Processing img {}".format(i))
+#     img = cv2.imread('samp' + str(i) + '.jpg')
+#     ensure_dir('testSample' + str(i))
+#     test, fields = createSampImage(img, 'testSample' + str(i))
+#     dataset.distribute_fields_into_directories(fields, dataset.prepare_pickle_with_chessboard_setup(""))
+#     cv2.imwrite('testSample' + str(i) + '/samp' + str(i) + 'Processed.jpg', test)
+# cv2.waitKey(0)
 
-def ensure_dir(file_path):
-    if not os.path.exists(file_path):
-        os.makedirs(file_path)
-
-
-for i in {1, 3, 4, 5, 6, 7}:
-# for i in {6}:
-    print("Processing img {}".format(i))
-    img = cv2.imread('samp' + str(i) + '.jpg')
-    ensure_dir('testSample' + str(i))
-    test = createSampImage(img, 'testSample' + str(i))
-    cv2.imwrite('testSample' + str(i) + '/samp' + str(i) + 'Processed.jpg', test)
-cv2.waitKey(0)
+i = 1
+for file in os.listdir("pictures/2"):
+    print(file)
+    img = cv2.imread("pictures/2/" + file)
+    ensure_dir("temp/" + str(i))
+    test, fields = createSampImage(img, "temp/" + str(i))
+    dataset.distribute_fields_into_directories(fields, dataset.prepare_pickle_with_chessboard_setup("2"))
+    ensure_dir("processedImages")
+    cv2.imwrite('processedImages/' + str(i) + '.jpg', test)
+    i += 1
